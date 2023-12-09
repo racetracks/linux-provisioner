@@ -1,0 +1,24 @@
+---
+- name: Update apt cache and install screen, net-tools, and sudo
+  hosts: localhost
+  become: yes 
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install screen package
+      apt:
+        name: screen
+        state: present
+
+    - name: Install net-tools package
+      apt:
+        name: net-tools
+        state: present
+
+    - name: Install sudo package
+      apt:
+        name: sudo
+        state: present
