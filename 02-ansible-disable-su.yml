@@ -1,5 +1,5 @@
 ---
-- name: Configure User and Sudo on Debian localhost
+- name: Install sudo and configure user on Debian localhost
   hosts: localhost
   become: true
   gather_facts: false
@@ -8,27 +8,21 @@
     user_name: "dc"
 
   tasks:
-    - name: Check if running as root
-      fail:
-        msg: "Please run this script as root."
-      when: ansible_user_id != '0'
+    - name: Check if sudo is installed
+      stat:
+        path: /usr/bin/sudo
+      register: sudo_check
+
+    - name: Install sudo if not present
+      command: apt-get install sudo -y
+      when: not sudo_check.stat.exists
 
     - name: Disable su
       command: mv /bin/su /bin/su.disabled
       args:
         creates: /bin/su.disabled
       register: disable_su_result
-
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-      when: disable_su_result is success
-
-    - name: Install sudo
-      apt:
-        name: sudo
-        state: present
-      when: disable_su_result is success
+      become: true
 
     - name: Add user to sudo group
       user:
