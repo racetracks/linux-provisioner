@@ -1,0 +1,50 @@
+---
+- name: Configure User and Sudo on Debian localhost
+  hosts: localhost
+  become: true
+  gather_facts: false
+
+  vars:
+    user_name: "dc"
+
+  tasks:
+    - name: Check if running as root
+      fail:
+        msg: "Please run this script as root."
+      when: ansible_user_id != '0'
+
+    - name: Disable su
+      command: mv /bin/su /bin/su.disabled
+      args:
+        creates: /bin/su.disabled
+      register: disable_su_result
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      when: disable_su_result is success
+
+    - name: Install sudo
+      apt:
+        name: sudo
+        state: present
+      when: disable_su_result is success
+
+    - name: Add user to sudo group
+      user:
+        name: "{{ user_name }}"
+        groups: sudo
+        append: yes
+      when: disable_su_result is success
+
+    - name: Configure sudoers file
+      lineinfile:
+        path: /etc/sudoers
+        line: "{{ user_name }} ALL=(ALL:ALL) ALL"
+        validate: 'visudo -cf %s'
+      when: disable_su_result is success
+
+    - name: Notify user to log out and log back in
+      debug:
+        msg: "su has been disabled, sudo has been installed and configured for user '{{ user_name }}'. Please log out and log back in to apply the changes."
+      when: disable_su_result is success
