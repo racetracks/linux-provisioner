@@ -1,0 +1,53 @@
+---
+- name: Configure Network on Debian
+  hosts: localhost
+  become: yes
+
+  vars:
+    ipv4_address: "192.168.1.10"
+    ipv4_gateway: "192.168.1.1"
+    dns_search: "example.com"
+    dns_domain: "example.com"
+    ethernet_interface: "{{ lookup('pipe', 'ip -o link show | awk -F\": \" \'{print $2}\' | grep -E \'^e\' | head -n 1') }}"
+
+  tasks:
+    - name: Set IPv4 address
+      command: ip addr add {{ ipv4_address }}/24 dev {{ ethernet_interface }}
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Set IPv4 gateway
+      command: ip route add default via {{ ipv4_gateway }}
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Set DNS search and domain
+      lineinfile:
+        path: /etc/resolv.conf
+        line: "{{ item }}"
+      with_items:
+        - "search {{ dns_search }}"
+        - "domain {{ dns_domain }}"
+      notify:
+        - Restart Network
+
+    - name: Disable IPv6
+      block:
+        - name: Create sysctl configuration file to disable IPv6
+          lineinfile:
+            path: /etc/sysctl.d/99-disable-ipv6.conf
+            line: "{{ item }}"
+          with_items:
+            - "net.ipv6.conf.all.disable_ipv6 = 1"
+            - "net.ipv6.conf.default.disable_ipv6 = 1"
+            - "net.ipv6.conf.lo.disable_ipv6 = 1"
+
+        - name: Apply sysctl changes
+          command: sudo sysctl -p
+      become: yes
+
+  handlers:
+    - name: Restart Network
+      systemd:
+        name: networking
+        state: restarted
