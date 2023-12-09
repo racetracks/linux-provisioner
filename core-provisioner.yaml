@@ -1,0 +1,142 @@
+---
+- name: Install Docker and configure services
+  hosts: localhost
+  become: yes
+
+  vars:
+    your_timezone_variable: "Australia/Adelaide"
+
+  tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - ca-certificates
+        - curl
+        - gnupg
+
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker GPG key if not exists or needs updating
+      shell: >
+        if [ ! -f /etc/apt/keyrings/docker.gpg ] || \
+           [ "$(curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor | md5sum | awk '{print $1}')" != "$(md5sum /etc/apt/keyrings/docker.gpg | awk '{print $1}')" ]; then \
+          curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Set permissions for Docker GPG key
+      file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+
+    - name: Add Docker repository to Apt sources
+      lineinfile:
+        path: /etc/apt/sources.list.d/docker.list
+        line: "deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian {{ ansible_facts.distribution_release }} stable"
+
+    - name: Update apt packages after adding Docker repository
+      apt:
+        update_cache: yes
+
+    - name: Create docker directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/docker/run
+        - /opt/docker/tmp
+        - /opt/docker/build
+
+    - name: Set permissions for docker directories
+      file:
+        path: "{{ item }}"
+        mode: '0755'
+      loop:
+        - /opt/docker/run
+        - /opt/docker/tmp
+        - /opt/docker/build
+
+    - name: Remove existing docker-compose.yml if it exists
+      file:
+        path: /opt/docker/build/docker-compose.yml
+        state: absent
+
+    - name: Create docker-compose.yml file
+      blockinfile:
+        path: /opt/docker/build/docker-compose.yml
+        block: |
+          version: "3"
+          services:
+            watchtower:
+              image: containrrr/watchtower
+              restart: always
+              volumes:
+                - /etc/localtime:/etc/localtime:ro
+                - /var/run/docker.sock:/var/run/docker.sock:ro
+                - /etc/timezone:/etc/timezone:ro
+              environment:
+                - PUID=1000
+                - PGID=1000
+                - TZ={{ your_timezone_variable }}
+                - UMASK_SET=022 #optional
+                - WATCHTOWER_CLEANUP=true
+                - WATCHTOWER_LABEL_ENABLE=true
+                - WATCHTOWER_INCLUDE_RESTARTING=true
+              labels:
+                - "com.centurylinklabs.watchtower.enable=true"
+            portainer_agent:
+              image: portainer/agent
+              restart: always
+              environment:
+                - PUID=1000
+                - PGID=1000
+                - TZ={{ your_timezone_variable }}
+                - UMASK_SET=022 #optional
+              ports:
+                - '9001:9001'
+              volumes:
+                - /etc/localtime:/etc/localtime:ro
+                - /var/run/docker.sock:/var/run/docker.sock:ro
+              labels:
+                - "com.centurylinklabs.watchtower.enable=true"
+        create: yes
+
+    - name: Run docker-compose up
+      command: "docker compose up -d"
+      args:
+        chdir: /opt/docker/build
+
+    - name: Check if /bin/su exists before attempting to move it
+      stat:
+        path: /bin/su
+      register: su_check
+
+    - name: Disable su if it exists
+      command: "mv -f /bin/su /bin/su.disabled"
+      when: su_check.stat.exists
+
+    - name: Disable IPv6
+      block:
+        - name: Disable IPv6
+          lineinfile:
+            path: "/etc/sysctl.d/99-disable-ipv6.conf"
+            line: "{{ item }}"
+          with_items:
+            - "net.ipv6.conf.all.disable_ipv6 = 1"
+            - "net.ipv6.conf.default.disable_ipv6 = 1"
+            - "net.ipv6.conf.lo.disable_ipv6 = 1"
+
+        - name: Apply sysctl changes
+          command: "sysctl -p"
