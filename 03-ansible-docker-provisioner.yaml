@@ -118,14 +118,7 @@
       args:
         chdir: /opt/docker/build
 
-    - name: Check if /bin/su exists before attempting to move it
-      stat:
-        path: /bin/su
-      register: su_check
 
-    - name: Disable su if it exists
-      command: "mv -f /bin/su /bin/su.disabled"
-      when: su_check.stat.exists
 
     - name: Disable IPv6
       block:
