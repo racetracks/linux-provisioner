@@ -17,5 +17,15 @@ fi
 
 # Execute the script to install Docker
 bash 02-install-docker.sh
-bash 03-install-docker-containers.sh
+
+ansible-playbook 03-install-docker.yml
+
+# Check if the previous command was successful
+if [ $? -ne 0 ]; then
+    echo "Ansible playbook execution failed."
+    exit 1
+fi
+
+
+bash 04-install-docker-containers.sh
 echo "All scripts executed successfully."

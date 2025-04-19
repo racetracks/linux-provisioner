@@ -1,0 +1,19 @@
+---
+- name: Configure system for user and SSH
+  hosts: localhost
+  tasks:
+    - name: Update package list
+      apt:
+        update_cache: yes
+
+    - name: Install apps
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - docker-buildx-plugin
+        - docker-compose-plugin
+   
