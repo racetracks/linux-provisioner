@@ -1,0 +1,24 @@
+---
+- name: reinstall packages
+  hosts: localhost
+
+  tasks:
+    - name: Update APT package index
+      apt:
+        update_cache: yes
+        
+    - name: Install apps
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - net-tools
+        - iptraf-ng
+        - nmap
+        - screen
+        - htop
+        - wget
+        - curl
+        - rsync
+        - nfs-common
+        - unattended-upgrades

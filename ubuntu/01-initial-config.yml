@@ -1,0 +1,101 @@
+---
+- name: Configure system for user and SSH
+  hosts: localhost
+  tasks:
+    - name: Update package list
+      apt:
+        update_cache: yes
+
+    - name: Install apps
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - net-tools
+        - iptraf-ng
+        - nmap
+        - screen
+        - htop
+        - wget
+        - curl
+        - rsync
+        - nfs-common
+        - unattended-upgrades
+
+    - name: Enable unattended-upgrades service
+      debconf:
+        name: unattended-upgrades
+        question: unattended-upgrades/enable_auto_updates
+        value: "true"
+        vtype: boolean
+
+    - name: Configure unattended-upgrades to install patches for all packages
+      copy:
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::AutocleanInterval "7";
+          APT::Periodic::Unattended-Upgrade "1";
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Display the unattended-upgrades configuration
+      command: cat /etc/apt/apt.conf.d/20auto-upgrades
+      register: unattended_upgrades_config
+
+    - name: Output unattended-upgrades configuration
+      debug:
+        var: unattended_upgrades_config.stdout
+
+
+    - name: Restart unattended-upgrades service
+      service:
+        name: unattended-upgrades
+        state: restarted
+
+
+
+- name: Create directories and subdirectories
+  hosts: localhost
+  become: yes
+
+  vars:
+    base_directories:
+      - watchtower
+      # Add any additional directories here
+
+    subdirectories:
+      - build
+      - run
+      - temp
+      # Add any additional subdirectories here
+
+  tasks:
+    - name: Create directories and subdirectories
+      file:
+        path: "/opt/docker/{{ item.0 }}/{{ item.1 }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ base_directories | product(subdirectories) | list }}"
+
+    - name: Create directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /opt/core/cron
+        - /opt/core/cron/ansible
+        - /opt/core/cron/sh
+        - /opt/core/deploy
+
+    - name: Set permissions to 755
+      file:
+        path: "{{ item }}"
+        mode: '0755'
+      loop:
+        - /opt/core/cron
+        - /opt/core/cron/ansible
+        - /opt/core/cron/sh
+        - /opt/core/deploy
